@@ -1,3 +1,4 @@
+
 import requests
 from analysis import (
     get_overview,
@@ -6,6 +7,27 @@ from analysis import (
     get_top_neighbourhoods,
     get_status_breakdown
 )
+PROMPT = """You are a helpful data analyst explaining Edmonton 311 service request data
+to a non-technical person.
+
+You are NOT a SQL assistant or a programming assistant.
+
+The user wants an explanation of the data, not code.
+
+IMPORTANT INSTRUCTIONS:
+- Answer in plain, natural English.
+- Do not write SQL queries.
+- Do not write Python code.
+- Do not use code blocks.
+- Do not explain how to query a database.
+- Use only facts and numbers shown in the database results.
+- Do not invent statistics or calculate new numerical values.
+- If the data does not answer the question, say that clearly.
+- Keep your answer concise and easy to understand.
+- You may explain what the results could mean, but label suggestions as recommendations.
+- Respond in plain english.
+- Include in your answer how many lines of data you receive.
+"""
 
 OLLAMA_URL = "http://localhost:11434/api/generate"
 MODEL = "llama3.2:3b"
@@ -18,24 +40,24 @@ def get_analytics_context():
     neighbourhoods = get_top_neighbourhoods().to_string(index=False)
     statuses = get_status_breakdown().to_string(index=False)
 
-    context = f"""
-    OVERVIEW:
-    {overview}
+    return f"""
+DATABASE RESULTS:
 
-    TOP SERVICE CATEGORIES:
-    {categories}
+OVERVIEW:
+{overview}
 
-    LAST 12 MONTHLY RECORDS:
-    {monthly}
+TOP SERVICE CATEGORIES:
+{categories}
 
-    TOP NEIGHBOURHOODS:
-    {neighbourhoods}
+LAST 12 MONTHLY RECORDS:
+{monthly}
 
-    REQUEST STATUSES:
-    {statuses}
-    """
+TOP NEIGHBOURHOODS:
+{neighbourhoods}
 
-    return context
+REQUEST STATUSES:
+{statuses}
+"""
 
 
 def ask_ai(question, context=None):
@@ -43,42 +65,43 @@ def ask_ai(question, context=None):
         context = get_analytics_context()
 
     prompt = f"""
-    You are a data analyst examining Edmonton 311 service request data.
 
-    Answer the user's question using ONLY the supplied data.
+Here are the database results:
+{context}
 
-    Rules:
-    - Do not invent statistics or figures.
-    - If the data does not contain the answer, say so.
-    - Identify meaningful trends and patterns.
-    - Explain findings in clear, professional language.
-    - Keep the answer concise and useful for decision-making.
+The user's question is:
+{question}
 
-    DATA:
-    {context}
+Respond directly to the user's question in plain English.
+"""
 
-    QUESTION:
-    {question}
-
-    ANSWER:
-    """
 
     response = requests.post(
         OLLAMA_URL,
         json={
+            "system": PROMPT,
             "model": MODEL,
             "prompt": prompt,
-            "stream": False
+            "stream": False,
+            "options": {
+                "temperature": 0.2
+            }
         },
         timeout=180
     )
 
     response.raise_for_status()
 
-    return response.json()["response"]
+    answer = response.json()["response"].strip()
+    used = response.json().get("prompt_eval_count", 0)
+    note = f"\n\n---\nModel read {used:,} of 8,192 prompt tokens."
+    if used >= 8192 - 50:
+        note += "\n\nWarning: prompt was likely truncated."
+
+    return answer + note
 
 
 if __name__ == "__main__":
-    print(get_analytics_context())
     print("\nAI ANALYST TEST:")
     print(ask_ai("What are the main patterns in this dataset?"))
+    
