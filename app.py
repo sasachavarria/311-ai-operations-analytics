@@ -14,7 +14,7 @@ from analysis import (
     get_filtered_data
 )
 
-from ai_analyst import ask_ai
+from ai_analyst import ask_ai, build_analytics_context
 
 st.set_page_config(
     page_title="Edmonton 311 Analytics",
@@ -188,7 +188,8 @@ if st.button("Generate AI Analysis"):
         with st.spinner("Analyzing your data..."):
 
             try:
-                answer = ask_ai(question, context=data.to_string(index=False))
+                context = build_analytics_context(data)
+                answer = ask_ai(question, context=context)
                 st.markdown(answer)
 
             except Exception as error:

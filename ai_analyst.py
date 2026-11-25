@@ -60,6 +60,65 @@ REQUEST STATUSES:
 """
 
 
+def build_analytics_context(data):
+
+    if data.empty:
+        return "No data is available for the selected filters."
+
+    total = data["total_requests"].sum()
+
+    monthly = (
+        data.groupby(
+            ["year", "month_number", "month"],
+            as_index=False
+        )["total_requests"]
+        .sum()
+        .sort_values(["year", "month_number"])
+    )
+
+    annual_peaks = monthly.loc[
+        monthly.groupby("year")["total_requests"].idxmax()
+    ]
+
+    categories = (
+        data.groupby("service_category")["total_requests"]
+        .sum()
+        .sort_values(ascending=False)
+        .head(10)
+    )
+
+    neighbourhoods = (
+        data.groupby("neighbourhood")["total_requests"]
+        .sum()
+        .sort_values(ascending=False)
+        .head(10)
+    )
+
+    statuses = (
+        data.groupby("request_status")["total_requests"]
+        .sum()
+        .sort_values(ascending=False)
+    )
+
+    return f"""
+TOTAL REQUESTS: {total:,.0f}
+
+MONTHLY TOTALS (ALL AVAILABLE MONTHS):
+{monthly.to_string(index=False)}
+
+HIGHEST MONTH BY YEAR:
+{annual_peaks.to_string(index=False)}
+
+TOP 10 CATEGORIES:
+{categories.to_string()}
+
+TOP 10 NEIGHBOURHOODS:
+{neighbourhoods.to_string()}
+
+REQUEST STATUSES:
+{statuses.to_string()}
+"""
+
 def ask_ai(question, context=None):
     if context is None:
         context = get_analytics_context()
